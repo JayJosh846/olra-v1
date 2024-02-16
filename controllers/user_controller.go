@@ -55,6 +55,57 @@ type EmailVerificationCodeRequest struct {
 	Email string `json:"email" validate:"required"`
 }
 
+type BVNRequest struct {
+	Bvn string `json:"bvn"`
+}
+
+type VerifyBVNResponse struct {
+	Status  bool                    `json:"status"`
+	Message string                  `json:"message"`
+	Data    VerifyBVNResponseEntity `json:"data"`
+}
+
+type VerifyBVNResponseEntity struct {
+	Entity VerifyBVNResponseBvn `json:"entity"`
+}
+
+type VerifyBVNResponseBvn struct {
+	Bvn VerifyBVNResponseData `json:"bvn"`
+}
+
+type VerifyBVNResponseData struct {
+	Status bool `json:"status"`
+}
+
+type CallbackData struct {
+	Title   string `json:"Title"`
+	Message string `json:"Message"`
+	Data    Data   `json:"Data"`
+}
+
+// Data represents the dynamic data structure within the callback data
+type Data struct {
+	NUBANName   string `json:"NUBANName"`
+	NUBAN       string `json:"NUBAN"`
+	NUBANStatus string `json:"NUBANStatus"`
+	NUBANType   int    `json:"NUBANType"`
+	Request     int    `json:"Request"`
+}
+
+type WalletRequest struct {
+	Gender      string `json:"gender"`
+	Email       string `json:"email"`
+	FirstName   string `json:"firstName"`
+	LastName    string `json:"lastName"`
+	Dob         string `json:"dob"`
+	PhoneNumber string `json:"phoneNumber"`
+}
+
+type GenerateWalletResponse struct {
+	Successful bool   `json:"Successful"`
+	Message    string `json:"Message"`
+}
+
 func RequestPhoneOTP(c *gin.Context) {
 	var _, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
@@ -364,10 +415,172 @@ func EmailVerification(c *gin.Context) {
 	})
 }
 
+func VerifyBVN(c *gin.Context) {
+	var (
+		bvnRequest    BVNRequest
+		verifyResonse VerifyBVNResponse
+	)
+
+	if err := c.BindJSON(&bvnRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	userEmail := c.Query("email")
+
+	validationErr := Validate.Struct(bvnRequest)
+	if validationErr != nil {
+		fmt.Println(validationErr)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       validationErr.Error(),
+			"data":          "",
+		})
+		return
+	}
+
+	bvnVerify, err := services.VerifyBVN(bvnRequest.Bvn)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = json.Unmarshal([]byte(bvnVerify), &verifyResonse)
+	if err != nil {
+		log.Println("Error:", err)
+		return
+	}
+
+	if !verifyResonse.Status {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Could not verify BVN. Please try again",
+			"data":          "",
+		})
+		return
+	}
+
+	user := database.User{}
+	err = database.DB.Where("email = ?", userEmail).First(&user).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "User does not exist",
+			"data":          "",
+		})
+		return
+	}
+
+	user.BvnVerified = true
+	user.KycStatus = true
+	err = database.DB.Save(&user).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Failed to update user",
+			"data":          "",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":         false,
+		"response code": 200,
+		"message":       "BVN verified successfully",
+		"data":          "",
+	})
+}
+
+func CallBack(c *gin.Context) {
+	var callbackData CallbackData
+	// if err := c.BindJSON(&callbackData); err != nil {
+	// 	log.Println("Error binding callback data:", err)
+	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid callback data"})
+	// 	return
+	// }
+
+	response, err := services.Callback()
+
+	err = json.Unmarshal([]byte(response), &callbackData)
+	if err != nil {
+		log.Println("Error:", err)
+		return
+	}
+
+	// Process the callback data
+	fmt.Println("Received callback:", callbackData)
+	fmt.Println("Title:", callbackData.Title)
+	fmt.Println("Message:", callbackData.Message)
+	fmt.Println("NUBAN Name:", callbackData.Data.NUBANName)
+	fmt.Println("NUBAN:", callbackData.Data.NUBAN)
+	fmt.Println("NUBAN Status:", callbackData.Data.NUBANStatus)
+	fmt.Println("NUBAN Type:", callbackData.Data.NUBANType)
+	fmt.Println("Request:", callbackData.Data.Request)
+
+	// Handle different types of requests
+	switch callbackData.Data.Request {
+	case 1:
+		fmt.Println("Request type: Wallet Creation")
+		// Handle wallet creation request
+		// Update your system with the newly generated wallet information
+	case 2:
+		fmt.Println("Request type: Account Creation")
+		// Handle account creation request
+	case 3:
+		fmt.Println("Request type: Pin Validation")
+		// Handle pin validation request
+	case 4:
+		fmt.Println("Request type: Payment Response")
+		// Handle payment response request
+	default:
+		fmt.Println("Unknown request type")
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Callback processed successfully"})
+}
+
+func GenerateWallet(c *gin.Context) {
+
+	var (
+		walletData       WalletRequest
+		generateResponse GenerateWalletResponse
+	)
+	if err := c.BindJSON(&walletData); err != nil {
+		log.Println("Error binding callback data:", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid callback data"})
+		return
+	}
+
+	response, err := services.GenerateWallet(
+		walletData.Gender,
+		walletData.Email,
+		walletData.FirstName,
+		walletData.LastName,
+		walletData.Dob,
+		walletData.PhoneNumber,
+	)
+
+	err = json.Unmarshal([]byte(response), &generateResponse)
+	if err != nil {
+		log.Println("Error:", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": generateResponse})
+
+}
+
 func UserRoutes(rg *gin.RouterGroup) {
 	userRoute := rg.Group("/user")
 	userRoute.POST("/send-phone-otp", RequestPhoneOTP)
 	userRoute.POST("/verify-phone-otp", VerifyPhoneOTP)
 	userRoute.POST("/add-user", AddUser)
 	userRoute.POST("/verify-email", EmailVerification)
+	userRoute.POST("/verify-bvn", VerifyBVN)
+	userRoute.POST("/callback", CallBack)
+	userRoute.POST("/generate-wallet", GenerateWallet)
+
 }
