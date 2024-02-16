@@ -3,11 +3,10 @@ package utils
 import (
 	cryptorand "crypto/rand"
 	"encoding/base64"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	mathrand "math/rand"
-	"net/http"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -66,7 +65,7 @@ func ExtractUsernameFromEmail(email string) (string, error) {
 	// Remove dot (.) if it exists before '@'
 	parts := strings.Split(cleanedEmail, "@")
 	if len(parts) != 2 {
-		return "", fmt.Errorf("Invalid email format")
+		return "", fmt.Errorf("invalid email format")
 	}
 	username := strings.ReplaceAll(parts[0], ".", "")
 
@@ -93,41 +92,34 @@ func GenerateVerificationCode() string {
 	return strconv.Itoa(code)
 }
 
-func GetGoogleUserInfo(accessToken string) (map[string]interface{}, error) {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v3/userinfo", nil)
-	if err != nil {
-		return nil, err
-	}
+func GenerateRandomAccountNumber() string {
+	// Generate the first two digits starting with "00"
+	firstTwoDigits := "00"
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	// Generate the remaining eight digits randomly
+	var remainingDigits string
+	for i := 0; i < 8; i++ {
+		remainingDigits += fmt.Sprintf("%d", mathrand.Intn(10))
 	}
-	defer resp.Body.Close()
-
-	var userInfo map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return nil, err
-	}
-
-	return userInfo, nil
+	return firstTwoDigits + remainingDigits
 }
 
-func GetFacebookUserInfo(accessToken string) (map[string]interface{}, error) {
-	facebookRequestURL := fmt.Sprintf("https://graph.facebook.com/v19.0/me?fields=id%2Cname&access_token=%s", accessToken)
-	resp, err := http.Get(facebookRequestURL)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+func ValidateTagRequest(tagRequest string) error {
+	// Regular expression to match only alphabets and numbers
+	regex := regexp.MustCompile("^[a-z]+[a-z0-9]*$")
 
-	var userInfo map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return nil, err
+	// Check if the tag contains only alphabets and numbers
+	if !regex.MatchString(tagRequest) {
+		return errors.New("tag can only contain lowercase alphabets and numbers, and must start with an alphabet")
 	}
-	return userInfo, nil
+
+	return nil
+}
+
+func ValidateOnlyNumbers(input string) bool {
+	// Regular expression to match exactly 6 digits
+	regex := regexp.MustCompile(`^\d{6}$`)
+	return regex.MatchString(input)
 }
 
 func MapToStruct(inputMap map[string]interface{}, resultStruct interface{}) (interface{}, error) {

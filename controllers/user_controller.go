@@ -77,6 +77,15 @@ type VerifyBVNResponseData struct {
 	Status bool `json:"status"`
 }
 
+type TagRequest struct {
+	Tag string `json:"tag"`
+}
+
+type PasscodeRequest struct {
+	Passcode        string `json:"passcode"`
+	ConfirmPasscode string `json:"confirmPasscode"`
+}
+
 type CallbackData struct {
 	Title   string `json:"Title"`
 	Message string `json:"Message"`
@@ -320,7 +329,7 @@ func AddUser(c *gin.Context) {
 		})
 		return
 	}
-	returnedOTP, err := services.CreateOtp(&existingUser, userRequestBody.Email)
+	returnedOTP, err := services.CreateEmailOtp(&existingUser, userRequestBody.Email)
 	defer cancel()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -397,7 +406,10 @@ func EmailVerification(c *gin.Context) {
 	}
 
 	// Update user's email verification status
-	if err := database.DB.Model(&user).Update("email_verified", true).Error; err != nil {
+	if err := database.DB.Model(&user).Updates(database.User{
+		EmailVerified: true,
+		SignupLevel:   2,
+	}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":         true,
 			"response code": 400,
@@ -475,6 +487,7 @@ func VerifyBVN(c *gin.Context) {
 
 	user.BvnVerified = true
 	user.KycStatus = true
+	user.SignupLevel = 3
 	err = database.DB.Save(&user).Error
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -570,7 +583,209 @@ func GenerateWallet(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": generateResponse})
+}
 
+func CreateTag(c *gin.Context) {
+	var (
+		tagRequest TagRequest
+	)
+
+	// Bind the request body to tagRequest struct
+	if err := c.BindJSON(&tagRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Extract the email from query parameters
+	userEmail := c.Query("email")
+	if userEmail == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "parameter required",
+			"data":          "",
+		})
+		return
+	}
+
+	// Validate the tagRequest
+	validationErr := Validate.Struct(tagRequest)
+	if validationErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       validationErr.Error(),
+			"data":          "",
+		})
+		return
+	}
+
+	validationError := helpers.ValidateTagRequest(tagRequest.Tag)
+	if validationError != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       validationError.Error(),
+			"data":          "",
+		})
+		return
+	}
+
+	// Check the user's KYC status
+	var user database.User
+	if err := database.DB.Where("email = ?", userEmail).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":         true,
+			"response code": 500,
+			"message":       "Failed to fetch user details",
+			"data":          "",
+		})
+		return
+	}
+	if !user.KycStatus {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Please verify your KYC before creating a tag",
+			"data":          "",
+		})
+		return
+	}
+	var existingUser database.User
+	if err := database.DB.Where("tag = ?", tagRequest.Tag).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Tag name already exists",
+			"data":          "",
+		})
+		return
+	}
+
+	generatedAccountNumber := helpers.GenerateRandomAccountNumber()
+
+	// Create a wallet for the user in the VirtualAccount table
+	virtualAccount := database.VirtualAccount{
+		VirtualAccountBank:    "Guaranty Trust Bank",
+		VirtualAccountAccount: generatedAccountNumber,
+		VirtualAccountName:    user.FirstName + " " + user.LastName,
+		UserID:                user.UserID,
+		Balance:               0, // Default balance
+	}
+	if err := database.DB.Create(&virtualAccount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":         true,
+			"response code": 500,
+			"message":       "Failed to create virtual account",
+			"data":          "",
+		})
+		return
+	}
+	// Update the user's records in the user table
+	user.Tag = tagRequest.Tag // Update the tag field
+	if err := database.DB.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":         true,
+			"response code": 500,
+			"message":       "Failed to update user records",
+			"data":          "",
+		})
+		return
+	}
+
+	// Respond with success message
+	c.JSON(http.StatusOK, gin.H{
+		"error":         false,
+		"response code": 200,
+		"message":       "Tag created successfully",
+		"data":          "",
+	})
+}
+
+func CreatePasscode(c *gin.Context) {
+	var (
+		passcodeRequest PasscodeRequest
+	)
+
+	// Bind the request body to passcodeRequest struct
+	if err := c.BindJSON(&passcodeRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Extract the email from query parameters
+	userEmail := c.Query("email")
+	if userEmail == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "parameter required",
+			"data":          "",
+		})
+		return
+	}
+
+	// Validate the tagRequest
+	validationErr := Validate.Struct(passcodeRequest)
+	if validationErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       validationErr.Error(),
+			"data":          "",
+		})
+		return
+	}
+	if passcodeRequest.Passcode != passcodeRequest.ConfirmPasscode {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Passcodes are not the same",
+			"data":          "",
+		})
+		return
+	}
+
+	validationError := helpers.ValidateOnlyNumbers(passcodeRequest.Passcode)
+	if !validationError {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Only 6 digits numbers are allowed",
+			"data":          "",
+		})
+		return
+	}
+
+	// Check the user's KYC status
+	var user database.User
+	if err := database.DB.Where("email = ?", userEmail).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":         true,
+			"response code": 500,
+			"message":       "Failed to fetch user details",
+			"data":          "",
+		})
+		return
+	}
+	// user.PasswordHash = helpers.HashPassword(passcodeRequest.Passcode)
+	if err := database.DB.Model(&user).Update(
+		"password_hash", helpers.HashPassword(passcodeRequest.Passcode),
+	).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":         true,
+			"response code": 500,
+			"message":       "Failed to update user profile",
+			"data":          "",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"error":         false,
+		"response code": 200,
+		"message":       "Passcode set successfully",
+		"data":          "",
+	})
 }
 
 func UserRoutes(rg *gin.RouterGroup) {
@@ -580,6 +795,9 @@ func UserRoutes(rg *gin.RouterGroup) {
 	userRoute.POST("/add-user", AddUser)
 	userRoute.POST("/verify-email", EmailVerification)
 	userRoute.POST("/verify-bvn", VerifyBVN)
+	userRoute.POST("/add-tag", CreateTag)
+	userRoute.POST("/add-passcode", CreatePasscode)
+
 	userRoute.POST("/callback", CallBack)
 	userRoute.POST("/generate-wallet", GenerateWallet)
 

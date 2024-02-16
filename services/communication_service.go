@@ -111,7 +111,7 @@ func VerifyOTP(pinID, pin string) (string, error) {
 	return string(body), nil
 }
 
-func CreateOtp(user *database.User, email string) (*database.Otp, error) {
+func CreateEmailOtp(user *database.User, email string) (*database.Otp, error) {
 
 	// Generate verification code
 	verificationCode := helpers.GenerateVerificationCode()
@@ -130,13 +130,13 @@ func CreateOtp(user *database.User, email string) (*database.Otp, error) {
 
 	// Send verification email
 	//  email := user.Email // Assuming email is stored in the User model
-	if err := sendOTP(user.FirstName, email, verificationCode); err != nil {
+	if err := sendEmailOTP(user.FirstName, email, verificationCode); err != nil {
 		return nil, err
 	}
 	return otp, nil
 }
 
-func sendOTP(firstName, email, code string) error {
+func sendEmailOTP(firstName, email, code string) error {
 
 	m := gomail.NewMessage()
 	m.SetHeader("From", "jesudara@withpepp.com")

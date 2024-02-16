@@ -44,6 +44,7 @@ type User struct {
 	PhoneVerified  bool
 	BvnVerified    bool
 	KycStatus      bool
+	SignupLevel    int       `gorm:"default:1"`
 	CreatedAt      time.Time `gorm:"autoCreateTime"`
 	UpdatedAt      time.Time `gorm:"autoUpdateTime"`
 	Groups         []Group   `gorm:"foreignKey:CreatedBy"`
