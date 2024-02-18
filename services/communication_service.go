@@ -35,7 +35,7 @@ type PhoneOTPRequest struct {
 	PINType        string `json:"pin_type"`
 }
 
-func SendPhoneOTP(mobile string) (string, error) {
+func SendPhoneWelcomeOTP(mobile string) (string, error) {
 	data := PhoneOTPRequest{
 		APIKey:         termiiApiKey,
 		MessageType:    "NUMERIC",
@@ -46,7 +46,7 @@ func SendPhoneOTP(mobile string) (string, error) {
 		PINTimeToLive:  10,
 		PINLength:      6,
 		PINPlaceholder: "< 1234 >",
-		MessageText:    "Hello. Your Olra confirmation code is < 1234 >. Valid for 10 minutes, one-time use only",
+		MessageText:    "Welcome to Olra! We are extremely glad to have you on our platform. Kindly use the confirmation code < 1234 > to verify your phone number. Valid for 10 minutes, one-time use only",
 		PINType:        "NUMERIC",
 	}
 
@@ -77,6 +77,47 @@ func SendPhoneOTP(mobile string) (string, error) {
 	return string(body), nil
 }
 
+func SendPhoneOTP(mobile string) (string, error) {
+	data := PhoneOTPRequest{
+		APIKey:         termiiApiKey,
+		MessageType:    "NUMERIC",
+		To:             mobile,
+		From:           "N-Alert",
+		Channel:        "dnd",
+		PINAttempts:    3,
+		PINTimeToLive:  10,
+		PINLength:      6,
+		PINPlaceholder: "< 1234 >",
+		MessageText:    "Your Olra confirmation code is < 1234 >. Do not disclose this code with anyone. Valid for 10 minutes, one-time use only",
+		PINType:        "NUMERIC",
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", termiiBaseURL+"/sms/otp/send", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("cache-control", "no-cache")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
+}
 func VerifyOTP(pinID, pin string) (string, error) {
 	data := map[string]string{
 		"api_key": termiiApiKey,

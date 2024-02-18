@@ -119,7 +119,7 @@ type GenerateWalletResponse struct {
 }
 
 // LoginRequest represents the login request
-type LoginRequest struct {
+type LoginRequestBody struct {
 	PhoneNumber string `json:"phoneNumber"`
 	Passcode    string `json:"passcode"`
 	DeviceID    string `json:"deviceId"`
@@ -161,7 +161,7 @@ func RequestPhoneOTP(c *gin.Context) {
 		return
 	}
 
-	phoneOTP, err := services.SendPhoneOTP(phoneOTPRequestBody.Mobile)
+	phoneOTP, err := services.SendPhoneWelcomeOTP(phoneOTPRequestBody.Mobile)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":         true,
@@ -798,12 +798,12 @@ func CreatePasscode(c *gin.Context) {
 	})
 }
 
-func Login(c *gin.Context) {
+func LoginRequest(c *gin.Context) {
 	var (
-		user         database.User
-		loginRequest LoginRequest
+		user             database.User
+		loginRequest     LoginRequestBody
+		phoneOTPResponse PhoneOTPResponse
 	)
-
 	if err := c.BindJSON(&loginRequest); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":         true,
@@ -818,7 +818,7 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error":         true,
 			"response code": 401,
-			"message":       "User not found",
+			"message":       "Invaid phone number",
 			"data":          "",
 		})
 		return
@@ -833,8 +833,102 @@ func Login(c *gin.Context) {
 		})
 		return
 	}
+	phoneOTP, err := services.SendPhoneOTP(loginRequest.PhoneNumber)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Could not send OTP request",
+			"data":          "",
+		})
+		return
+	}
+	e := json.Unmarshal([]byte(phoneOTP), &phoneOTPResponse)
+	if e != nil {
+		log.Println("Error:", e)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"error":         false,
+		"response code": 200,
+		"message":       "OTP sent successfully",
+		"data":          phoneOTPResponse,
+	})
+
+}
+
+func VerifyLoginRequest(c *gin.Context) {
+	userDeviceID := c.Query("deviceID")
+	var (
+		user                      database.User
+		verifyPhoneOTPRequestBody VerifyPhoneOTPRequestBody
+		verifyPhoneOTPBody        VerifyPhoneOTPBody
+	)
+	if err := c.BindJSON(&verifyPhoneOTPRequestBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		return
+	}
+	validationErr := Validate.Struct(verifyPhoneOTPRequestBody)
+	if validationErr != nil {
+		fmt.Println(validationErr)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       validationErr.Error(),
+			"data":          "",
+		})
+		return
+	}
+	verifyPhoneOTP, err := services.VerifyOTP(
+		verifyPhoneOTPRequestBody.PinId,
+		verifyPhoneOTPRequestBody.Pin,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Somehting went wrong. Please try again",
+			"data":          "",
+		})
+		return
+	}
+	fmt.Println("verifyPhoneOTP", verifyPhoneOTP)
+	e := json.Unmarshal([]byte(verifyPhoneOTP), &verifyPhoneOTPBody)
+	if e != nil {
+		log.Println("Error:", e)
+		return
+	}
+	if verifyPhoneOTPBody.Status == 400 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Token expired.",
+			"data":          "",
+		})
+		return
+	}
+	fmt.Println("verifyPhoneOTPBody", verifyPhoneOTPBody)
+	if !verifyPhoneOTPBody.Verified {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Invalid token",
+			"data":          "",
+		})
+		return
+	}
+	// Find user by phone number
+	if err := database.DB.Where("phone_number = ?", verifyPhoneOTPRequestBody.Phone).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":         true,
+			"response code": 401,
+			"message":       "Invaid phone number",
+			"data":          "",
+		})
+		return
+	}
 	// Logout user from previous device
-	if user.DeviceID != "" && user.DeviceID != loginRequest.DeviceID {
+	if user.DeviceID != "" && user.DeviceID != userDeviceID {
 		err := middleware.LogoutUserFromDevice(user.DeviceID)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -847,9 +941,8 @@ func Login(c *gin.Context) {
 		}
 
 	}
-
 	// Update current device for the user
-	user.DeviceID = loginRequest.DeviceID
+	user.DeviceID = userDeviceID
 	if err := database.DB.Save(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":         true,
@@ -859,11 +952,10 @@ func Login(c *gin.Context) {
 		})
 		return
 	}
-
 	expirationTime := time.Now().Add(10 * time.Minute)
 	claims := &middleware.Claims{
 		UserID:   user.UserID,
-		DeviceID: loginRequest.DeviceID, // Include Device ID in the token payload
+		DeviceID: userDeviceID, // Include Device ID in the token payload
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},
@@ -880,11 +972,10 @@ func Login(c *gin.Context) {
 		return
 	}
 	deviceTokenMapping := database.DeviceTokenMapping{
-		DeviceID: loginRequest.DeviceID,
+		DeviceID: userDeviceID,
 		Token:    tokenString,
 	}
 	database.DB.Create(&deviceTokenMapping)
-
 	c.JSON(http.StatusOK, gin.H{
 		"error":         false,
 		"response code": 200,
@@ -903,7 +994,8 @@ func UserRoutes(rg *gin.RouterGroup) {
 	userRoute.POST("/verify-bvn", VerifyBVN)
 	userRoute.POST("/add-tag", CreateTag)
 	userRoute.POST("/add-passcode", CreatePasscode)
-	userRoute.POST("/login", Login)
+	userRoute.POST("/login-request", LoginRequest)
+	userRoute.POST("/verify-login", VerifyLoginRequest)
 
 	userRoute.POST("/callback", CallBack)
 	userRoute.POST("/generate-wallet", GenerateWallet)

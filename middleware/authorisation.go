@@ -56,13 +56,10 @@ func LogoutUserFromDevice(deviceID string) error {
 	}
 	// Update the user's record to remove the current device information
 	user.DeviceID = ""
-	// Assuming you're using GORM, save the updated user record
 	if err := database.DB.Save(&user).Error; err != nil {
-		// Handle error (e.g., database update failed)
 		return errors.New("failed to update user record")
 	}
-	// 3. Optionally, perform additional actions like logging out the user from the current session
-	// (This step may vary based on your application's architecture)
+	// Logout user previous session
 	result := database.DB.Where("device_id = ?", deviceID).Delete(&dbTokenMap)
 	if result.Error != nil {
 		return result.Error
@@ -70,7 +67,5 @@ func LogoutUserFromDevice(deviceID string) error {
 	if result.RowsAffected == 0 {
 		return errors.New("device ID not found")
 	}
-
-	// 4. Return nil if the logout process was successful
 	return nil
 }
