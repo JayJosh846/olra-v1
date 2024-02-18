@@ -52,6 +52,9 @@ type User struct {
 	VirtualAccount VirtualAccount
 	Banks          []Bank
 	Budgets        []Budget
+	DeviceID       string `gorm:"null"`
+	// DeviceSessions []DeviceSession // Track user's active device sessions
+
 }
 
 // Group represents the groups table
@@ -126,11 +129,25 @@ type Budget struct {
 }
 
 type Otp struct {
-	ID        uint      `gorm:"primaryKey"`
-	UserID    uint      // Foreign key referencing the User table
+	ID        uint `gorm:"primaryKey"`
+	UserID    uint
 	Token     string    `gorm:"not null"`
 	ExpiresAt time.Time `gorm:"not null"`
 }
+
+type DeviceTokenMapping struct {
+	DeviceID string `gorm:"primaryKey"`
+	Token    string
+}
+
+// type DeviceSession struct {
+// 	ID           uint `gorm:"primaryKey"`
+// 	UserID       uint
+// 	DeviceID     string    `gorm:"not null;unique"`
+// 	LoggedInAt   time.Time `gorm:"not null"`
+// 	LoggedOutAt  time.Time // Nullable, to track when the session was logged out
+// 	LastActiveAt time.Time `gorm:"not null"` // Track last activity time
+// }
 
 var DB *gorm.DB
 
@@ -157,6 +174,7 @@ func New() Service {
 	// 	&GroupVirtualAccount{},
 	// 	&Budget{},
 	// 	&Otp{},
+	// 	&DeviceTokenMapping{},
 	// )
 
 	s := &service{db: DB}

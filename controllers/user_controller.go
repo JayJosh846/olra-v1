@@ -8,10 +8,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"golang.org/x/crypto/bcrypt"
 
 	"olra-v1/internal/database"
+	"olra-v1/middleware"
 	"olra-v1/services"
 	helpers "olra-v1/utils"
 )
@@ -115,6 +118,13 @@ type GenerateWalletResponse struct {
 	Message    string `json:"Message"`
 }
 
+// LoginRequest represents the login request
+type LoginRequest struct {
+	PhoneNumber string `json:"phoneNumber"`
+	Passcode    string `json:"passcode"`
+	DeviceID    string `json:"deviceId"`
+}
+
 func RequestPhoneOTP(c *gin.Context) {
 	var _, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
@@ -173,7 +183,7 @@ func RequestPhoneOTP(c *gin.Context) {
 		"message":       "OTP sent successfully",
 		"data":          phoneOTPResponse,
 	})
-	return
+
 }
 
 func VerifyPhoneOTP(c *gin.Context) {
@@ -228,7 +238,7 @@ func VerifyPhoneOTP(c *gin.Context) {
 	}
 	fmt.Println("verifyPhoneOTPBody", verifyPhoneOTPBody)
 
-	if verifyPhoneOTPBody.Verified == false {
+	if !verifyPhoneOTPBody.Verified {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":         true,
 			"response code": 400,
@@ -258,7 +268,7 @@ func VerifyPhoneOTP(c *gin.Context) {
 		"message":       "OTP verified successfully",
 		"data":          verifyPhoneOTPBody,
 	})
-	return
+
 }
 
 func AddUser(c *gin.Context) {
@@ -788,6 +798,102 @@ func CreatePasscode(c *gin.Context) {
 	})
 }
 
+func Login(c *gin.Context) {
+	var (
+		user         database.User
+		loginRequest LoginRequest
+	)
+
+	if err := c.BindJSON(&loginRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Invalid request",
+			"data":          "",
+		})
+		return
+	}
+	// Find user by phone number
+	if err := database.DB.Where("phone_number = ?", loginRequest.PhoneNumber).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":         true,
+			"response code": 401,
+			"message":       "User not found",
+			"data":          "",
+		})
+		return
+	}
+	// Validate passcode
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(loginRequest.Passcode)); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":         true,
+			"response code": 401,
+			"message":       "Invaid passcode",
+			"data":          "",
+		})
+		return
+	}
+	// Logout user from previous device
+	if user.DeviceID != "" && user.DeviceID != loginRequest.DeviceID {
+		err := middleware.LogoutUserFromDevice(user.DeviceID)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":         true,
+				"response code": 401,
+				"message":       err.Error(),
+				"data":          "",
+			})
+			return
+		}
+
+	}
+
+	// Update current device for the user
+	user.DeviceID = loginRequest.DeviceID
+	if err := database.DB.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":         true,
+			"response code": 500,
+			"message":       "Failed to update user device",
+			"data":          "",
+		})
+		return
+	}
+
+	expirationTime := time.Now().Add(10 * time.Minute)
+	claims := &middleware.Claims{
+		UserID:   user.UserID,
+		DeviceID: loginRequest.DeviceID, // Include Device ID in the token payload
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expirationTime.Unix(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(middleware.JwtKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":         true,
+			"response code": 500,
+			"message":       "Failed to generate token",
+			"data":          "",
+		})
+		return
+	}
+	deviceTokenMapping := database.DeviceTokenMapping{
+		DeviceID: loginRequest.DeviceID,
+		Token:    tokenString,
+	}
+	database.DB.Create(&deviceTokenMapping)
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":         false,
+		"response code": 200,
+		"message":       "Login successful",
+		"data":          gin.H{"token": tokenString},
+	})
+
+}
+
 func UserRoutes(rg *gin.RouterGroup) {
 	userRoute := rg.Group("/user")
 	userRoute.POST("/send-phone-otp", RequestPhoneOTP)
@@ -797,6 +903,7 @@ func UserRoutes(rg *gin.RouterGroup) {
 	userRoute.POST("/verify-bvn", VerifyBVN)
 	userRoute.POST("/add-tag", CreateTag)
 	userRoute.POST("/add-passcode", CreatePasscode)
+	userRoute.POST("/login", Login)
 
 	userRoute.POST("/callback", CallBack)
 	userRoute.POST("/generate-wallet", GenerateWallet)
