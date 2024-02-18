@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"olra-v1/internal/database"
 	"os"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
@@ -19,31 +20,64 @@ type Claims struct {
 	jwt.StandardClaims
 }
 
+type User struct {
+	UserId   *uint
+	DeviceId *string
+}
+
 func AuthMiddleware(c *gin.Context) {
-	tokenString := c.GetHeader("Authorization")
+
+	// tokenString := c.Request.Header.Get("token")
+	tokenString := c.GetHeader("token")
 	if tokenString == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":         true,
+			"response code": 401,
+			"message":       "No token provided",
+			"data":          "",
+		})
 		c.Abort()
 		return
 	}
-
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return JwtKey, nil
 	})
 	if err != nil || !token.Valid {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":         true,
+			"response code": 401,
+			"message":       "Unauthorized",
+			"data":          "",
+		})
 		c.Abort()
 		return
 	}
-
 	claims, ok := token.Claims.(*Claims)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":         true,
+			"response code": 401,
+			"message":       "The Token is invalid",
+			"data":          "",
+		})
 		c.Abort()
 		return
 	}
-
-	c.Set("userID", claims.UserID)
+	if claims.ExpiresAt < time.Now().Local().Unix() {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":         true,
+			"response code": 401,
+			"message":       "The Token has expired",
+			"data":          "",
+		})
+		c.Abort()
+		return
+	}
+	user := User{
+		UserId:   &claims.UserID,
+		DeviceId: &claims.DeviceID,
+	}
+	c.Set("user", user)
 	c.Next()
 }
 

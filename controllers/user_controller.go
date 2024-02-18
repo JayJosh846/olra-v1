@@ -14,6 +14,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"olra-v1/internal/database"
+	"olra-v1/internal/structs"
 	"olra-v1/middleware"
 	"olra-v1/services"
 	helpers "olra-v1/utils"
@@ -21,117 +22,13 @@ import (
 
 var Validate = validator.New()
 
-type VerifyPhoneOTPRequestBody struct {
-	PinId string `json:"pinId" validate:"required"`
-	Pin   string `json:"pin" validate:"required"`
-	Phone string `json:"phone" validate:"required"`
-}
-
-type VerifyPhoneOTPBody struct {
-	PinId    string `json:"pinId"`
-	Verified bool   `json:"verified"`
-	// Verifiedd string `json:"verified"`
-	Msisdn string `json:"msisdn"`
-	Status int    `json:"status"`
-}
-
-type PhoneOTPRequestBody struct {
-	Mobile string `json:"mobile" validate:"required"`
-}
-
-type PhoneOTPResponse struct {
-	PinId     string `json:"pinId"`
-	To        string `json:"to"`
-	SmsStatus string `json:"smsStatus"`
-	Status    int    `json:"status"`
-}
-
-type UserRequestBody struct {
-	FirstName   string `json:"firstName" validate:"required"`
-	LastName    string `json:"lastName" validate:"required"`
-	Email       string `json:"email" validate:"required"`
-	PhoneNumber string `json:"phoneNumber" validate:"required"`
-}
-
-type EmailVerificationCodeRequest struct {
-	Code  string `json:"code"`
-	Email string `json:"email" validate:"required"`
-}
-
-type BVNRequest struct {
-	Bvn string `json:"bvn"`
-}
-
-type VerifyBVNResponse struct {
-	Status  bool                    `json:"status"`
-	Message string                  `json:"message"`
-	Data    VerifyBVNResponseEntity `json:"data"`
-}
-
-type VerifyBVNResponseEntity struct {
-	Entity VerifyBVNResponseBvn `json:"entity"`
-}
-
-type VerifyBVNResponseBvn struct {
-	Bvn VerifyBVNResponseData `json:"bvn"`
-}
-
-type VerifyBVNResponseData struct {
-	Status bool `json:"status"`
-}
-
-type TagRequest struct {
-	Tag string `json:"tag"`
-}
-
-type PasscodeRequest struct {
-	Passcode        string `json:"passcode"`
-	ConfirmPasscode string `json:"confirmPasscode"`
-}
-
-type CallbackData struct {
-	Title   string `json:"Title"`
-	Message string `json:"Message"`
-	Data    Data   `json:"Data"`
-}
-
-// Data represents the dynamic data structure within the callback data
-type Data struct {
-	NUBANName   string `json:"NUBANName"`
-	NUBAN       string `json:"NUBAN"`
-	NUBANStatus string `json:"NUBANStatus"`
-	NUBANType   int    `json:"NUBANType"`
-	Request     int    `json:"Request"`
-}
-
-type WalletRequest struct {
-	Gender      string `json:"gender"`
-	Email       string `json:"email"`
-	FirstName   string `json:"firstName"`
-	LastName    string `json:"lastName"`
-	Dob         string `json:"dob"`
-	PhoneNumber string `json:"phoneNumber"`
-}
-
-type GenerateWalletResponse struct {
-	Successful bool   `json:"Successful"`
-	Message    string `json:"Message"`
-}
-
-// LoginRequest represents the login request
-type LoginRequestBody struct {
-	PhoneNumber string `json:"phoneNumber"`
-	Passcode    string `json:"passcode"`
-	DeviceID    string `json:"deviceId"`
-}
-
 func RequestPhoneOTP(c *gin.Context) {
 	var _, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
 	var (
-		phoneOTPRequestBody PhoneOTPRequestBody
-		phoneOTPResponse    PhoneOTPResponse
+		phoneOTPRequestBody structs.PhoneOTPRequestBody
+		phoneOTPResponse    structs.PhoneOTPResponse
 	)
 	if err := c.BindJSON(&phoneOTPRequestBody); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err})
@@ -191,8 +88,8 @@ func VerifyPhoneOTP(c *gin.Context) {
 	defer cancel()
 
 	var (
-		verifyPhoneOTPRequestBody VerifyPhoneOTPRequestBody
-		verifyPhoneOTPBody        VerifyPhoneOTPBody
+		verifyPhoneOTPRequestBody structs.VerifyPhoneOTPRequestBody
+		verifyPhoneOTPBody        structs.VerifyPhoneOTPBody
 	)
 	if err := c.BindJSON(&verifyPhoneOTPRequestBody); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err})
@@ -253,9 +150,9 @@ func VerifyPhoneOTP(c *gin.Context) {
 	}
 	result := database.DB.Create(&user)
 	if result.Error != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"error":         false,
-			"response code": 200,
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":         true,
+			"response code": 500,
 			"message":       "Couldn't add user details",
 			"data":          result.Error,
 		})
@@ -276,7 +173,7 @@ func AddUser(c *gin.Context) {
 	defer cancel()
 
 	var (
-		userRequestBody UserRequestBody
+		userRequestBody structs.UserRequestBody
 		// verifyPhoneOTPBody        VerifyPhoneOTPBody
 	)
 	if err := c.BindJSON(&userRequestBody); err != nil {
@@ -311,7 +208,7 @@ func AddUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":         true,
 			"response code": 400,
-			"message":       "User with this phone number doesn't exist",
+			"message":       "User with this phone number exist",
 			"data":          "",
 		})
 		return
@@ -361,7 +258,7 @@ func AddUser(c *gin.Context) {
 
 func EmailVerification(c *gin.Context) {
 	var (
-		emailVerificationCodeRequest EmailVerificationCodeRequest
+		emailVerificationCodeRequest structs.EmailVerificationCodeRequest
 		user                         database.User
 	)
 
@@ -439,8 +336,8 @@ func EmailVerification(c *gin.Context) {
 
 func VerifyBVN(c *gin.Context) {
 	var (
-		bvnRequest    BVNRequest
-		verifyResonse VerifyBVNResponse
+		bvnRequest    structs.BVNRequest
+		verifyResonse structs.VerifyBVNResponse
 	)
 
 	if err := c.BindJSON(&bvnRequest); err != nil {
@@ -518,7 +415,7 @@ func VerifyBVN(c *gin.Context) {
 }
 
 func CallBack(c *gin.Context) {
-	var callbackData CallbackData
+	var callbackData structs.CallbackData
 	// if err := c.BindJSON(&callbackData); err != nil {
 	// 	log.Println("Error binding callback data:", err)
 	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid callback data"})
@@ -568,8 +465,8 @@ func CallBack(c *gin.Context) {
 func GenerateWallet(c *gin.Context) {
 
 	var (
-		walletData       WalletRequest
-		generateResponse GenerateWalletResponse
+		walletData       structs.WalletRequest
+		generateResponse structs.GenerateWalletResponse
 	)
 	if err := c.BindJSON(&walletData); err != nil {
 		log.Println("Error binding callback data:", err)
@@ -597,7 +494,7 @@ func GenerateWallet(c *gin.Context) {
 
 func CreateTag(c *gin.Context) {
 	var (
-		tagRequest TagRequest
+		tagRequest structs.TagRequest
 	)
 
 	// Bind the request body to tagRequest struct
@@ -692,7 +589,9 @@ func CreateTag(c *gin.Context) {
 		return
 	}
 	// Update the user's records in the user table
-	user.Tag = tagRequest.Tag // Update the tag field
+	user.Tag = tagRequest.Tag
+	user.SignupLevel = 4
+	// Update the tag field
 	if err := database.DB.Save(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":         true,
@@ -714,7 +613,7 @@ func CreateTag(c *gin.Context) {
 
 func CreatePasscode(c *gin.Context) {
 	var (
-		passcodeRequest PasscodeRequest
+		passcodeRequest structs.PasscodeRequest
 	)
 
 	// Bind the request body to passcodeRequest struct
@@ -778,10 +677,13 @@ func CreatePasscode(c *gin.Context) {
 		})
 		return
 	}
-	// user.PasswordHash = helpers.HashPassword(passcodeRequest.Passcode)
-	if err := database.DB.Model(&user).Update(
-		"password_hash", helpers.HashPassword(passcodeRequest.Passcode),
-	).Error; err != nil {
+	// if err := database.DB.Model(&user).Update(
+	// 	"password_hash", helpers.HashPassword(passcodeRequest.Passcode),
+	// )
+	if err := database.DB.Model(&user).Updates(database.User{
+		PasswordHash: helpers.HashPassword(passcodeRequest.Passcode),
+		SignupLevel:  5,
+	}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":         true,
 			"response code": 500,
@@ -801,8 +703,8 @@ func CreatePasscode(c *gin.Context) {
 func LoginRequest(c *gin.Context) {
 	var (
 		user             database.User
-		loginRequest     LoginRequestBody
-		phoneOTPResponse PhoneOTPResponse
+		loginRequest     structs.LoginRequestBody
+		phoneOTPResponse structs.PhoneOTPResponse
 	)
 	if err := c.BindJSON(&loginRequest); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -861,8 +763,8 @@ func VerifyLoginRequest(c *gin.Context) {
 	userDeviceID := c.Query("deviceID")
 	var (
 		user                      database.User
-		verifyPhoneOTPRequestBody VerifyPhoneOTPRequestBody
-		verifyPhoneOTPBody        VerifyPhoneOTPBody
+		verifyPhoneOTPRequestBody structs.VerifyPhoneOTPRequestBody
+		verifyPhoneOTPBody        structs.VerifyPhoneOTPBody
 	)
 	if err := c.BindJSON(&verifyPhoneOTPRequestBody); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err})
@@ -952,7 +854,7 @@ func VerifyLoginRequest(c *gin.Context) {
 		})
 		return
 	}
-	expirationTime := time.Now().Add(10 * time.Minute)
+	expirationTime := time.Now().Local().Add(time.Hour * time.Duration(24))
 	claims := &middleware.Claims{
 		UserID:   user.UserID,
 		DeviceID: userDeviceID, // Include Device ID in the token payload
@@ -985,6 +887,43 @@ func VerifyLoginRequest(c *gin.Context) {
 
 }
 
+func Search(c *gin.Context) {
+	query := c.Query("q")
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       "Search query is required",
+			"data":          "",
+		})
+		return
+	}
+	var users []database.User
+	if err := database.DB.Where("tag LIKE ?", "%"+query+"%").Find(&users).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":         true,
+			"response code": 404,
+			"message":       "Error retrieving users",
+			"data":          "",
+		})
+		return
+	}
+	var selectedUsers []structs.UsersTags
+	for _, user := range users {
+		selectedUser := structs.UsersTags{
+			User_ID: user.UserID,
+			Tag:     user.Tag,
+		}
+		selectedUsers = append(selectedUsers, selectedUser)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"error":         false,
+		"response code": 200,
+		"message":       "Users retrieved successfully",
+		"data":          selectedUsers,
+	})
+}
+
 func UserRoutes(rg *gin.RouterGroup) {
 	userRoute := rg.Group("/user")
 	userRoute.POST("/send-phone-otp", RequestPhoneOTP)
@@ -996,6 +935,7 @@ func UserRoutes(rg *gin.RouterGroup) {
 	userRoute.POST("/add-passcode", CreatePasscode)
 	userRoute.POST("/login-request", LoginRequest)
 	userRoute.POST("/verify-login", VerifyLoginRequest)
+	userRoute.POST("/search", Search)
 
 	userRoute.POST("/callback", CallBack)
 	userRoute.POST("/generate-wallet", GenerateWallet)

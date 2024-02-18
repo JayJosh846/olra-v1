@@ -12,8 +12,10 @@ var server *gin.Engine
 func (s *Server) RegisterRoutes() http.Handler {
 	server = gin.Default()
 	basepath := server.Group("/api/v1")
+	// server.GET()
 	// server.GET("https://wema-alatdev-apimgt.azure-api.net/callback-url/callbackURL", controllers.CallBack)
 
 	controllers.UserRoutes(basepath)
+	controllers.PaymentRoutes(basepath)
 	return server
 }

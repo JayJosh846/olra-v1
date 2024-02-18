@@ -79,12 +79,17 @@ type GroupMember struct {
 
 // Transaction represents the transactions table
 type Transaction struct {
-	TransactionID   uint `gorm:"primaryKey"`
-	UserID          uint
-	TransactionType string  `gorm:"not null"`
-	Amount          float64 `gorm:"not null"`
-	Description     string
-	TransactionDate time.Time `gorm:"not null"`
+	TransactionID      uint `gorm:"primaryKey"`
+	UserID             uint
+	TransactionEnviron string  `gorm:"not null"` //withinOlra, outsideOlra
+	TransactionType    string  `gorm:"not null"` //request, olraTransfer-out, olraTransfer-in, bankTransfer-out, bankTransfer-in
+	Amount             float64 `gorm:"not null"`
+	Description        string
+	Requestee          string
+	Receiver           string
+	Sender             string
+	Status             string    `gorm:"default:pending"` //pending, completed
+	TransactionDate    time.Time `gorm:"not null"`
 }
 
 // VirtualAccount represents the virtual_accounts table

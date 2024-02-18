@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"olra-v1/internal/database"
+	"olra-v1/internal/structs"
+
 	helpers "olra-v1/utils"
 
 	"gopkg.in/gomail.v2"
@@ -21,22 +23,8 @@ var (
 	termiiApiKey  = os.Getenv("TERMII_API_KEY")
 )
 
-type PhoneOTPRequest struct {
-	APIKey         string `json:"api_key"`
-	MessageType    string `json:"message_type"`
-	To             string `json:"to"`
-	From           string `json:"from"`
-	Channel        string `json:"channel"`
-	PINAttempts    int    `json:"pin_attempts"`
-	PINTimeToLive  int    `json:"pin_time_to_live"`
-	PINLength      int    `json:"pin_length"`
-	PINPlaceholder string `json:"pin_placeholder"`
-	MessageText    string `json:"message_text"`
-	PINType        string `json:"pin_type"`
-}
-
 func SendPhoneWelcomeOTP(mobile string) (string, error) {
-	data := PhoneOTPRequest{
+	data := structs.PhoneOTPRequest{
 		APIKey:         termiiApiKey,
 		MessageType:    "NUMERIC",
 		To:             mobile,
@@ -78,7 +66,7 @@ func SendPhoneWelcomeOTP(mobile string) (string, error) {
 }
 
 func SendPhoneOTP(mobile string) (string, error) {
-	data := PhoneOTPRequest{
+	data := structs.PhoneOTPRequest{
 		APIKey:         termiiApiKey,
 		MessageType:    "NUMERIC",
 		To:             mobile,
@@ -196,4 +184,44 @@ func sendEmailOTP(firstName, email, code string) error {
 	}
 
 	return nil
+}
+
+func SendRequestFundsSMS(mobile, firstName, lastName, tag string, amount float64) (string, error) {
+	message := fmt.Sprintf(
+		"Hello %s %s, you have received a request from %s to send the amount of %.2f to them. Kindly log into your Olra account to do so.",
+		firstName, lastName, tag, amount,
+	)
+
+	data := structs.FundsRequest{
+		APIKey:  termiiApiKey,
+		To:      mobile,
+		From:    "N-Alert",
+		SMS:     message,
+		Type:    "plain",
+		Channel: "dnd",
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", termiiBaseURL+"/sms/send", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("cache-control", "no-cache")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
 }
