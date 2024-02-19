@@ -114,6 +114,11 @@ type RequestFundsRequest struct {
 	Requestee   string  `json:"requestee"`
 }
 
+type SendFundsRequest struct {
+	Amount      float64 `json:"amount"`
+	Description string  `json:"description"`
+	Receiver    string  `json:"receiver"`
+}
 type PhoneOTPRequest struct {
 	APIKey         string `json:"api_key"`
 	MessageType    string `json:"message_type"`

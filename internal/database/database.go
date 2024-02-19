@@ -99,7 +99,7 @@ type VirtualAccount struct {
 	VirtualAccountAccount string `gorm:"not null;unique"`
 	VirtualAccountName    string `gorm:"not null"`
 	UserID                uint
-	Balance               float64 `gorm:"default:0"`
+	Balance               float64 `gorm:"default:1000"`
 }
 
 // Bank represents the banks table
