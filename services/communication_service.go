@@ -267,8 +267,47 @@ func CreditFundsSMS(mobile, tag string, amount, newBalance float64) (string, err
 
 func DebitFundsSMS(mobile string, amount, newBalance float64) (string, error) {
 	message := fmt.Sprintf(
-		"Your Olra account has been debited with %.2f. Your new account balance is %.2f",
+		"Your transfer of %.2f is confirmed and processing. Your available Olra account balance is %.2f",
 		amount, newBalance,
+	)
+	data := structs.FundsRequest{
+		APIKey:  termiiApiKey,
+		To:      mobile,
+		From:    "N-Alert",
+		SMS:     message,
+		Type:    "plain",
+		Channel: "dnd",
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", termiiBaseURL+"/sms/send", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("cache-control", "no-cache")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
+}
+
+func DebitGroupFundsSMS(mobile, group string, amount, newBalance float64) (string, error) {
+	message := fmt.Sprintf(
+		"Your transfer of %.2f to the %s group is confirmed and processing. Your available Olra account balance is %.2f",
+		amount, group, newBalance,
 	)
 	data := structs.FundsRequest{
 		APIKey:  termiiApiKey,

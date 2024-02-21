@@ -148,3 +148,20 @@ type FundsResponse struct {
 	Balance    float64 `json:"balance"`
 	User       string  `json:"user"`
 }
+
+type GroupRequest struct {
+	GroupName    string                `json:"groupName"`
+	Tag          string                `json:"tag"`
+	Amount       int                   `json:"amount"`
+	GroupMembers []GroupFriendsRequest `json:"groupMembers"`
+}
+
+type GroupFriendsRequest struct {
+	Friend string `json:"friend"`
+}
+
+type SendGroupFundsRequest struct {
+	Amount      float64 `json:"amount"`
+	Description string  `json:"description"`
+	Group       string  `json:"group"`
+}

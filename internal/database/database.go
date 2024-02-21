@@ -26,10 +26,7 @@ var (
 	host     = os.Getenv("DB_HOST")
 )
 
-// // Define your model structs
-// User represents the users table
 type User struct {
-	// ID              primitive.ObjectID `json:"_id" bson:"_id"`
 	UserID         uint   `gorm:"primaryKey"`
 	FirstName      string `gorm:"null"`
 	LastName       string `gorm:"null"`
@@ -52,24 +49,27 @@ type User struct {
 	VirtualAccount VirtualAccount
 	Banks          []Bank
 	Budgets        []Budget
-	DeviceID       string `gorm:"null"`
-	// DeviceSessions []DeviceSession // Track user's active device sessions
-
+	DeviceID       string  `gorm:"null"`
+	GroupsAdmin    []Group `gorm:"foreignKey:AdminID"` // Groups where the user is admin
 }
 
-// Group represents the groups table
+// Group struct represents group-related data
 type Group struct {
-	GroupID             uint      `gorm:"primaryKey"`
-	GroupName           string    `gorm:"not null"`
-	GroupTag            string    `gorm:"not null;unique"`
-	CreatedBy           uint      `gorm:"not null"`
+	GroupID             uint   `gorm:"primaryKey"`
+	GroupName           string `gorm:"not null"`
+	GroupTag            string `gorm:"not null;unique"`
+	CreatedBy           uint   `gorm:"not null"`
+	GroupBudget         int
 	CreatedAt           time.Time `gorm:"autoCreateTime"`
 	UpdatedAt           time.Time `gorm:"autoUpdateTime"`
 	Members             []User    `gorm:"many2many:group_members"`
 	GroupVirtualAccount GroupVirtualAccount
+	AdminID             uint   // Foreign key referencing the UserID of the admin user
+	Admin               User   `gorm:"foreignKey:AdminID"`        // Group administrator
+	CoAdmins            []User `gorm:"many2many:group_co_admins"` // Group co-administrators
 }
 
-// GroupMember represents the group_members table
+// GroupMember struct represents the pivot table group_members used for the many-to-many relationship between groups and users
 type GroupMember struct {
 	GroupMemberID uint `gorm:"primaryKey"`
 	GroupID       uint
@@ -82,7 +82,7 @@ type Transaction struct {
 	TransactionID      uint `gorm:"primaryKey"`
 	UserID             uint
 	TransactionEnviron string  `gorm:"not null"` //withinOlra, outsideOlra
-	TransactionType    string  `gorm:"not null"` //request, olraTransfer-out, olraTransfer-in, bankTransfer-out, bankTransfer-in
+	TransactionType    string  `gorm:"not null"` //request, olraTransfer-out, olraTransfer-in, bankTransfer-out, bankTransfer-in, group-payment
 	Amount             float64 `gorm:"not null"`
 	Description        string
 	Requestee          string

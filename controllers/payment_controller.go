@@ -301,7 +301,7 @@ func SendFundsOlra(c *gin.Context) {
 		return
 	}
 	ee := json.Unmarshal([]byte(smsFundsResponse), &fundsResponse)
-	if e != nil {
+	if ee != nil {
 		log.Println("Error:", ee)
 		return
 	}

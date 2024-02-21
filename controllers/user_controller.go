@@ -568,9 +568,7 @@ func CreateTag(c *gin.Context) {
 		})
 		return
 	}
-
 	generatedAccountNumber := helpers.GenerateRandomAccountNumber()
-
 	// Create a wallet for the user in the VirtualAccount table
 	virtualAccount := database.VirtualAccount{
 		VirtualAccountBank:    "Guaranty Trust Bank",
@@ -854,7 +852,7 @@ func VerifyLoginRequest(c *gin.Context) {
 		})
 		return
 	}
-	expirationTime := time.Now().Local().Add(time.Hour * time.Duration(24))
+	expirationTime := time.Now().Local().Add(time.Hour * time.Duration(168))
 	claims := &middleware.Claims{
 		UserID:   user.UserID,
 		DeviceID: userDeviceID, // Include Device ID in the token payload

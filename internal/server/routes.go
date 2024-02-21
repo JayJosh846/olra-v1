@@ -17,5 +17,6 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 	controllers.UserRoutes(basepath)
 	controllers.PaymentRoutes(basepath)
+	controllers.GroupRoutes(basepath)
 	return server
 }
