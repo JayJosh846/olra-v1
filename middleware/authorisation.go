@@ -46,7 +46,7 @@ func AuthMiddleware(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error":         true,
 			"response code": 401,
-			"message":       "Unauthorized",
+			"message":       err.Error(),
 			"data":          "",
 		})
 		c.Abort()
