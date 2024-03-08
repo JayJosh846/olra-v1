@@ -165,3 +165,9 @@ type SendGroupFundsRequest struct {
 	Description string  `json:"description"`
 	Group       string  `json:"group"`
 }
+
+type WaitlistRequest struct {
+	FullName string `json:"fullName"`
+	Email    string `json:"email"`
+	Phone    string `json:"phone"`
+}

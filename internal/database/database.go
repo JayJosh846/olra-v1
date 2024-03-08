@@ -145,6 +145,22 @@ type DeviceTokenMapping struct {
 	Token    string
 }
 
+type Waitlist struct {
+	ID       uint
+	FullName string
+	Email    string
+	Phone    string
+}
+
+type Contact struct {
+	ID        uint
+	FirstName string
+	LastName  string
+	Email     string
+	Phone     string
+	Message   string
+}
+
 // type DeviceSession struct {
 // 	ID           uint `gorm:"primaryKey"`
 // 	UserID       uint
@@ -180,6 +196,8 @@ func New() Service {
 	// 	&Budget{},
 	// 	&Otp{},
 	// 	&DeviceTokenMapping{},
+	// 	&Waitlist{},
+	// 	&Contact{},
 	// )
 
 	s := &service{db: DB}
