@@ -171,3 +171,11 @@ type WaitlistRequest struct {
 	Email    string `json:"email"`
 	Phone    string `json:"phone"`
 }
+
+type ContactRequest struct {
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+	Email     string `json:"email"`
+	Phone     string `json:"phone"`
+	Message   string `json:"message"`
+}

@@ -68,7 +68,56 @@ func AddWhitelist(c *gin.Context) {
 	})
 }
 
+func AddContact(c *gin.Context) {
+	var _, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+
+	var (
+		contactRequest structs.ContactRequest
+	)
+	if err := c.BindJSON(&contactRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		return
+	}
+	validationErr := Validate.Struct(contactRequest)
+	if validationErr != nil {
+		fmt.Println(validationErr)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         true,
+			"response code": 400,
+			"message":       validationErr.Error(),
+			"data":          "",
+		})
+		return
+	}
+
+	contact := database.Contact{
+		FirstName: contactRequest.FirstName,
+		LastName:  contactRequest.LastName,
+		Email:     contactRequest.Email,
+		Phone:     contactRequest.Phone,
+		Message:   contactRequest.Message,
+	}
+	result := database.DB.Create(&contact)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":         true,
+			"response code": 500,
+			"message":       "Couldn't add contact message",
+			"data":          result.Error,
+		})
+		return
+	}
+	c.JSON(http.StatusFound, gin.H{
+		"error":         false,
+		"response code": 200,
+		"message":       " Your message has been sent successfully",
+		"data":          contact,
+	})
+}
+
 func WebRoutes(rg *gin.RouterGroup) {
 	webRoutes := rg.Group("/web")
 	webRoutes.POST("/add-waitlist", AddWhitelist)
+	webRoutes.POST("/add-contact", AddContact)
 }
